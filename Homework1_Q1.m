@@ -78,7 +78,7 @@ fprintf('Empirical min P(error) = %.4f at gamma = %.4f\n', Pe_min, exp(optimized
 fprintf('Theoretical optimal gamma = %.4f\n', p0/p1);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Question 1, Part B: 
+%% Question 1, Part B: Naive Bayesian Classifier
  % Falsely assume covariance matrix is identity matrix
 Sigma(:,:,1) = eye(3); Sigma(:,:,2) = eye(3);
 
@@ -135,3 +135,87 @@ legend("Correct ERM", "Minimum Perror ERM", "Naive Bayesian Classifier", "Minimu
 % Print results
 fprintf('Empirical min P(error) = %.4f at gamma = %.4f\n', Pe_min, exp(optimized_tau));
 fprintf('Theoretical optimal gamma = %.4f\n', p0/p1);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Question 1, Part C: Fisher LDA Classifier 
+%% 1) Estimate class means and covariances from the 10k samples (sample averages)
+label = label';
+X=X';
+idx0 = (label==0);
+idx1 = (label==1);
+
+x1 = X(idx0,:);
+x2 = X(idx1,:);
+
+n0 = size(x1,1);
+n1 = size(x2,1);
+
+% Estimate mean vectors and covariance matrices from samples
+mu1hat = mean(x1,1)';  S1hat = cov(x1);  
+mu2hat = mean(x2,1)';  S2hat = cov(x2);
+
+% Calculate the between/within-class scatter matrices:
+Sw = S2hat + S1hat;   % within-class scatter (equal weight)
+Sb = (mu1hat-mu2hat)*(mu1hat-mu2hat)'; % Between-class scatter 
+
+% Solve for the Fisher LDA projection vector (in w)
+% Solve Sb * v = lambda * Sw * v  -> pick eigenvector with largest eigenvalue
+[V,D] = eig(inv(Sw)*Sb); % generalized eigenproblem
+% eig may produce complex small nums due to numeric; keep real parts
+[~,ind] = sort(diag(D),'descend');
+w = V(:,ind(1)); % Fisher LDA projection vector
+
+% Normalize w for convenience (direction only matters)
+w = w / norm(w);
+
+% For a two-class case, direction is proportional to inv(Sw)*(mu1-mu0)
+% (sanity check) w_alt = Sw \ diffm; w_alt = w_alt / norm(w_alt);
+
+%% 3) Project data onto w and sweep thresholds tau
+proj = X * w;             % N x 1 scalar projections
+proj0 = proj(idx0);
+proj1 = proj(idx1);
+
+% Choose threshold grid that covers range of projections
+tauVals = linspace(min(proj)-1e-3, max(proj)+1e-3, 1000);  % dense sweep
+TPR_lda = zeros(size(tauVals));
+FPR_lda = zeros(size(tauVals));
+Pe_lda  = zeros(size(tauVals));
+
+for i = 1:length(tauVals)
+    tau = tauVals(i);
+    decisions = proj > tau;  % decide class 1 if w'*x > tau
+    
+    TP = sum(decisions==1 & label==1);
+    FN = sum(decisions==0 & label==1);
+    FP = sum(decisions==1 & label==0);
+    TN = sum(decisions==0 & label==0);
+    
+    TPR_lda(i) = TP / (TP + FN);
+    FPR_lda(i) = FP / (FP + TN);
+    Pe_lda(i)  = (FP + FN) / N;
+end
+
+% Find minimum empirical error and its tau
+[Pe_min_lda, idxMin_lda] = min(Pe_lda);
+tau_emp = tauVals(idxMin_lda);
+TPR_emp_lda = TPR_lda(idxMin_lda);
+FPR_emp_lda = FPR_lda(idxMin_lda);
+
+
+% Plot ROC
+figure(6);
+plot(FPR_lda, TPR_lda, 'g.-','LineWidth',1.5); hold on;
+plot(FPR_emp_lda, TPR_emp_lda, 'mo','MarkerSize',10,'LineWidth',2);
+xlabel('False Positive Rate (FPR)');
+ylabel('True Positive Rate (TPR)');
+title('ROC Curve - Fisher Linear Discriminant Analysis');
+axis([0 1 0 1]);
+
+% Plot Perror with the minimum-Perror point marked
+figure(7)
+plot(tauVals,Pe_lda, '*r'); hold on;
+plot(tau_emp, min(Pe_lda), 'go','MarkerSize',10,'LineWidth',2); % mark empirical min error
+xlabel('Thresholds'), ylabel('P(error) for Fosher Linear Discriminant Analysis'),
+%legend("Correct ERM", "Minimum Perror ERM", "Naive Bayesian Classifier", "Minimum Perror NB")
+
