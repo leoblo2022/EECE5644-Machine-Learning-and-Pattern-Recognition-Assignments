@@ -60,7 +60,7 @@ Pfp_emp = Pfp(idxMin);
 % Plot ROC again with the minimum-Perror point marked
 figure(4);
 plot(Pfp,Ptp,'b.-','LineWidth',1.5); hold on;
-plot(Pfp_emp, Ptp_emp, 'go','MarkerSize',10,'LineWidth',2); % mark empirical min error
+plot(Pfp_emp, Ptp_emp, 'ro','MarkerSize',10,'LineWidth',2); % mark empirical min error
 xlabel('False Positive Rate (FPR)');
 ylabel('True Positive Rate (TPR)');
 title('ROC Curve with Minimum-Error Operating Point');
@@ -117,7 +117,7 @@ Pfp_emp = Pfp(idxMin);
 % Plot ROC with the minimum-Perror point marked
 figure(4);
 plot(Pfp,Ptp,'c.-','LineWidth',1.5); hold on;
-plot(Pfp_emp, Ptp_emp, 'go','MarkerSize',10,'LineWidth',2); % mark empirical min error
+plot(Pfp_emp, Ptp_emp, 'ro','MarkerSize',10,'LineWidth',2); % mark empirical min error
 xlabel('False Positive Rate (FPR)');
 ylabel('True Positive Rate (TPR)');
 title('ROC Curve with Minimum-Error Operating Point');
@@ -159,32 +159,25 @@ Sw = S2hat + S1hat;   % within-class scatter (equal weight)
 Sb = (mu1hat-mu2hat)*(mu1hat-mu2hat)'; % Between-class scatter 
 
 % Solve for the Fisher LDA projection vector (in w)
-% Solve Sb * v = lambda * Sw * v  -> pick eigenvector with largest eigenvalue
 [V,D] = eig(inv(Sw)*Sb); % generalized eigenproblem
-% eig may produce complex small nums due to numeric; keep real parts
-[~,ind] = sort(diag(D),'descend');
+[~,ind] = sort(diag(D),'descend'); %pick eigenvector with largest eigenvalue
 w = V(:,ind(1)); % Fisher LDA projection vector
 
-% Normalize w for convenience (direction only matters)
-w = w / norm(w);
+% Linearly project the data from both categories on to w
+y = X * w;             
+y1 = w'*x1';
+y2 = w'*x2';
 
-% For a two-class case, direction is proportional to inv(Sw)*(mu1-mu0)
-% (sanity check) w_alt = Sw \ diffm; w_alt = w_alt / norm(w_alt);
-
-%% 3) Project data onto w and sweep thresholds tau
-proj = X * w;             % N x 1 scalar projections
-proj0 = proj(idx0);
-proj1 = proj(idx1);
 
 % Choose threshold grid that covers range of projections
-tauVals = linspace(min(proj)-1e-3, max(proj)+1e-3, 1000);  % dense sweep
-TPR_lda = zeros(size(tauVals));
-FPR_lda = zeros(size(tauVals));
-Pe_lda  = zeros(size(tauVals));
+thresholdList = linspace(min(y)-1e-3, max(y)+1e-3, 1000);  % threshold sweep from -infinity to +infinity
+TPR_lda = zeros(size(thresholdList));
+FPR_lda = zeros(size(thresholdList));
+Pe_lda  = zeros(size(thresholdList));
 
-for i = 1:length(tauVals)
-    tau = tauVals(i);
-    decisions = proj > tau;  % decide class 1 if w'*x > tau
+for i = 1:length(thresholdList)
+    tau = thresholdList(i);
+    decisions = y > tau;  % decide class 1 if w'*x > tau
     
     TP = sum(decisions==1 & label==1);
     FN = sum(decisions==0 & label==1);
@@ -198,24 +191,24 @@ end
 
 % Find minimum empirical error and its tau
 [Pe_min_lda, idxMin_lda] = min(Pe_lda);
-tau_emp = tauVals(idxMin_lda);
+tau_emp = thresholdList(idxMin_lda);
 TPR_emp_lda = TPR_lda(idxMin_lda);
 FPR_emp_lda = FPR_lda(idxMin_lda);
 
 
 % Plot ROC
-figure(6);
+figure(4);
 plot(FPR_lda, TPR_lda, 'g.-','LineWidth',1.5); hold on;
-plot(FPR_emp_lda, TPR_emp_lda, 'mo','MarkerSize',10,'LineWidth',2);
+plot(FPR_emp_lda, TPR_emp_lda, 'ro','MarkerSize',10,'LineWidth',2);
 xlabel('False Positive Rate (FPR)');
 ylabel('True Positive Rate (TPR)');
 title('ROC Curve - Fisher Linear Discriminant Analysis');
+legend("Correct ERM", "Minimum Perror ERM", "Naive Bayesian Classifier", "Minimum Perror NB", "Fisher LDA", "Minimum Perror LDA")
 axis([0 1 0 1]);
 
 % Plot Perror with the minimum-Perror point marked
-figure(7)
-plot(tauVals,Pe_lda, '*r'); hold on;
+figure(5)
+plot(thresholdList,Pe_lda, '*y'); hold on;
 plot(tau_emp, min(Pe_lda), 'go','MarkerSize',10,'LineWidth',2); % mark empirical min error
 xlabel('Thresholds'), ylabel('P(error) for Fosher Linear Discriminant Analysis'),
-%legend("Correct ERM", "Minimum Perror ERM", "Naive Bayesian Classifier", "Minimum Perror NB")
-
+legend("Correct ERM", "Minimum Perror ERM", "Naive Bayesian Classifier", "Minimum Perror NB", "Fisher LDA", "Minimum Perror LDA")
