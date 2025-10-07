@@ -7,4 +7,4 @@ Main scripts devloped by the student are labeled
 Professor Erdogmus' helper functions that are used within the main homework scripts:
 - evalGaussian.m
 - evalGaussianPDF.m
-- generatedatafromGMM.m 
+- generateDataFromGMM.m 
